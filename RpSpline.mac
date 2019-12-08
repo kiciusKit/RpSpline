@@ -1,0 +1,108 @@
+!Spline interpolation in APDL
+!*******************************Clear data before run****************************************
+!*******************************************************************************************
+*del,q,,nopr
+*del,u,,nopr
+*del,M,,nopr
+*del,TAB,,nopr
+*del,X,,nopr
+*del,Y,,nopr
+!**********************************Spline IMPUT_DATA****************************************
+!*******************************************************************************************
+compname='ccc'
+N_data=9					!Number of data for interpolation
+leftBC=1					!leftBC is free in spline interpolation
+rightBC=1					!rightBC is free in spline interpolation
+yp1=0.5						!if leftBC is not free condition for interpolation
+ypn=0.5						!if rightBC is not free condition for interpolation
+
+
+SF=0.8						!safty factor for utilization plot
+SCAL_FACTOR=1.5				!Scalling factor for utilization plot
+
+*dim,X,array,N_data,1
+*dim,Y,array,N_data,1
+
+X(1,1)=20,300,350,400,450,500,550,600,650
+Y(1,1)=1030,880,872.5,865,862.5,860,643,430,240
+!*******************************Spline calculations****************************************
+!*******************************************************************************************
+*dim,q,array,N_data,1
+*dim,u,array,N_data,1
+*dim,M,array,N_data,1
+
+!Checking if leftBC is true
+*if,leftBC,eq,1,then
+	q(1)=0
+	u(1)=0
+*else
+	q(1)=-0.5
+	u(1)=3*((Y(2)-Y(1))/(X(2)-X(1))-yp1)/(X(2)-X(1))
+*endif
+
+
+n=N_data-1
+*do,i,2,n,1
+    lambda=(X(i)-X(i-1))/(X(i+1)-X(i-1))
+    mi=1-lambda
+    d=6*((Y(i+1)-Y(i))/(X(i+1)-X(i))-(Y(i)-Y(i-1))/(X(i)-X(i-1)))/(X(i+1)-X(i-1))
+    q(i)=-lambda/(mi*q(i-1)+2)
+    u(i)=(d-mi*u(i-1))/(mi*q(i-1)+2)			!Checking this value
+*enddo
+
+*if,rightBC,eq,1,then
+d=6*(ypn-(Y(n)-Y(n-1))/(X(n)-X(n-1)))/(X(n)-X(n-1))
+M(n)=(d-u(n-1))/(q(n-1)+2)
+*endif
+
+*do,i,n,1,-1
+M(i)=q(i)*M(i+1)+u(i)
+*enddo
+!*******************************Spline calculations END*************************************
+
+
+
+!*******************************UTILIZATION CALCULATIONS*************************************
+cmsel,s,compname
+nsle,r,corn
+
+*get,NC,node,,count
+
+*dim,TAB,array,NC,5
+*vget,TAB(1,1),node,,nlist
+
+*abset,STATUS,bar
+*do,j,1,NC,1
+	*get,TAB(j,2),node,TAB(j,1),bfe,temp
+	*get,TAB(j,3),node,TAB(j,1),S,EQV
+
+	i=n
+	*dowhile,i
+		i=i-1
+		Xval=TAB(j,2)
+		dt = Xval-X(i)
+		*if,i,eq,1,OR,dt,GT,0,then
+			temp=i
+			i=0
+		*endif
+	*enddo
+	
+	i=temp
+	dx=X(i+1)-X(i)
+	TAB(j,4)=(((M(i+1)-M(i))/(6*dx)*dt+M(i)/2)*dt+((Y(i+1)-Y(i))/dx-(M(i+1)+2*M(i))/6*dx))*dt+Y(i)
+	TAB(j,5)=TAB(j,3)/(SCAL_FACTOR*SF*TAB(j,4))
+	*abcheck,(j/NC*100)
+*enddo
+*abfinish
+
+
+*cfopen,RPvalue,inp
+*vwrite,TAB(1,1),TAB(1,4)
+('BF,', F8.0 , ',temp,' , F15.5)
+*cfclos
+
+*cfopen,UTvalue,inp
+*vwrite,TAB(1,1),TAB(1,5)
+('BF,', F8.0 , ',temp,' , F15.5)
+*cfclos
+
